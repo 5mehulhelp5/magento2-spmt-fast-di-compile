@@ -2,7 +2,6 @@
     "name": "spmt/magento2-spmt-fast-di-compile",
     "description": "Spmt FastDiCompile module companion",
     "type": "magento2-module",
-    "version": "dev-develop",
     "license": "MIT",
     "require": {
         "magento/framework": "*",
