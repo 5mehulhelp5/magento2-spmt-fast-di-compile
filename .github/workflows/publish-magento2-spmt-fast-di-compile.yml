@@ -14,7 +14,7 @@ permissions:
 jobs:
   update-packagist:
     name: Update Packagist
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     env:
       PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate publishing configuration
         run: |
