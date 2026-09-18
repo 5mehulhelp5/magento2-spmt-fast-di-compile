@@ -1,0 +1,92 @@
+name: Magento 2 Fast DI Compile Integration
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  phpunit:
+    name: PHPUnit / PHP ${{ matrix.php-version }} / Symfony ${{ matrix.symfony-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php-version: '8.3'
+            symfony-version: '^6.4'
+            phpunit-version: '^10.5'
+          - php-version: '8.4'
+            symfony-version: '^6.4'
+            phpunit-version: '^10.5'
+          - php-version: '8.5'
+            symfony-version: '^7.4'
+            phpunit-version: '^12.0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run PHPUnit in official PHP image
+        run: |
+          docker run --rm \
+            -v "$PWD":/app \
+            -w /app \
+            "php:${{ matrix.php-version }}-cli-alpine" \
+            sh -lc '
+              set -e
+              apk add --no-cache ca-certificates curl git unzip
+              curl -fsSL https://getcomposer.org/installer -o composer-setup.php
+              expected_signature="$(curl -fsSL https://composer.github.io/installer.sig)"
+              actual_signature="$(php -r "echo hash_file('\''sha384'\'', '\''composer-setup.php'\'');")"
+              if [ "$expected_signature" != "$actual_signature" ]; then
+                echo "Invalid Composer installer signature"
+                rm composer-setup.php
+                exit 1
+              fi
+              php composer-setup.php --install-dir=/usr/local/bin --filename=composer --quiet
+              rm composer-setup.php
+              composer global require --no-interaction --no-progress \
+                "phpunit/phpunit:${{ matrix.phpunit-version }}" \
+                "symfony/console:${{ matrix.symfony-version }}" \
+                "symfony/process:${{ matrix.symfony-version }}"
+              export PATH="$(composer global config home --absolute)/vendor/bin:$PATH"
+              phpunit --configuration phpunit.xml.dist
+            '
+
+  magento-coding-standard:
+    name: Magento Coding Standard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Magento Coding Standard in official PHP image
+        run: |
+          docker run --rm \
+            -v "$PWD":/app \
+            -w /app \
+            php:8.4-cli-alpine \
+            sh -lc '
+              set -e
+              apk add --no-cache ca-certificates curl git unzip
+              curl -fsSL https://getcomposer.org/installer -o composer-setup.php
+              expected_signature="$(curl -fsSL https://composer.github.io/installer.sig)"
+              actual_signature="$(php -r "echo hash_file('\''sha384'\'', '\''composer-setup.php'\'');")"
+              if [ "$expected_signature" != "$actual_signature" ]; then
+                echo "Invalid Composer installer signature"
+                rm composer-setup.php
+                exit 1
+              fi
+              php composer-setup.php --install-dir=/usr/local/bin --filename=composer --quiet
+              rm composer-setup.php
+              composer global config allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+              composer global require --no-interaction --no-progress \
+                "dealerdirect/phpcodesniffer-composer-installer:^1.0" \
+                "magento/magento-coding-standard:*"
+              export PATH="$(composer global config home --absolute)/vendor/bin:$PATH"
+              phpcs --standard=Magento2 --extensions=php,xml src
+            '

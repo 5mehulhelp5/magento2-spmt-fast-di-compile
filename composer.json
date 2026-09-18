@@ -1,0 +1,35 @@
+{
+    "name": "spmt/magento2-spmt-fast-di-compile",
+    "description": "Spmt FastDiCompile module companion",
+    "type": "magento2-module",
+    "version": "dev-develop",
+    "license": "MIT",
+    "require": {
+        "magento/framework": "*",
+        "php": ">=8.1",
+        "symfony/console": "^6.4 || ^7.4",
+        "symfony/process": "^6.4 || ^7.4"
+    },
+    "autoload": {
+        "files": [
+            "src/registration.php"
+        ],
+        "psr-4": {
+            "Spmt\\FastDiCompile\\": "src/"
+        }
+    },
+    "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "magento/magento-coding-standard": "*",
+        "phpunit/phpunit": "^10.5 || ^12.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Spmt\\FastDiCompile\\Test\\Unit\\": "Test/Unit/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --configuration phpunit.xml.dist",
+        "phpcs": "phpcs --standard=Magento2 --extensions=php,xml ./src"
+    }
+}

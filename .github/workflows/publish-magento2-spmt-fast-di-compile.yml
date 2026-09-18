@@ -1,0 +1,71 @@
+name: Publish Fast DI Compile Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  update-packagist:
+    name: Update Packagist
+    runs-on: ubuntu-latest
+
+    env:
+      PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+      PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+      PACKAGIST_CONTACT_EMAIL: ${{ secrets.PACKAGIST_CONTACT_EMAIL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate publishing configuration
+        run: |
+          test -n "$PACKAGIST_USERNAME" || { echo "PACKAGIST_USERNAME secret is required"; exit 1; }
+          test -n "$PACKAGIST_TOKEN" || { echo "PACKAGIST_TOKEN secret is required"; exit 1; }
+
+          if printf "%s" "$PACKAGIST_CONTACT_EMAIL" | grep -q "[[:cntrl:]]"; then
+            echo "PACKAGIST_CONTACT_EMAIL must not contain control characters"
+            exit 1
+          fi
+
+      - name: Validate package and update Packagist in official PHP image
+        run: |
+          docker run --rm \
+            -e GITHUB_REPOSITORY \
+            -e PACKAGIST_USERNAME \
+            -e PACKAGIST_TOKEN \
+            -e PACKAGIST_CONTACT_EMAIL \
+            -v "$PWD":/app \
+            -w /app \
+            php:8.4-cli-alpine \
+            sh -lc '
+              set -e
+              apk add --no-cache ca-certificates curl git unzip
+              curl -fsSL https://getcomposer.org/installer -o composer-setup.php
+              expected_signature="$(curl -fsSL https://composer.github.io/installer.sig)"
+              actual_signature="$(php -r "echo hash_file('\''sha384'\'', '\''composer-setup.php'\'');")"
+              if [ "$expected_signature" != "$actual_signature" ]; then
+                echo "Invalid Composer installer signature"
+                rm composer-setup.php
+                exit 1
+              fi
+              php composer-setup.php --install-dir=/usr/local/bin --filename=composer --quiet
+              rm composer-setup.php
+              composer validate --no-check-publish composer.json
+              contact_email="${PACKAGIST_CONTACT_EMAIL:-packagist@example.invalid}"
+              repository_url="https://github.com/${GITHUB_REPOSITORY}"
+              curl --fail-with-body \
+                --request POST \
+                --header "Content-Type: application/json" \
+                --header "Authorization: Bearer ${PACKAGIST_USERNAME}:${PACKAGIST_TOKEN}" \
+                --header "User-Agent: spmt-fast-di-compile-publisher (mailto:${contact_email})" \
+                --data "{\"repository\":\"${repository_url}\"}" \
+                https://packagist.org/api/update-package
+            '
