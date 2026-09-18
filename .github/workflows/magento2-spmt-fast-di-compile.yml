@@ -1,6 +1,7 @@
 name: Magento 2 Fast DI Compile Integration
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
 
