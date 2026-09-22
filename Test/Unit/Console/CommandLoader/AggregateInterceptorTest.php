@@ -31,9 +31,19 @@ class AggregateInterceptorTest extends TestCase
         $this->resetTestRoot();
     }
 
-    public function testReturnsFastCommandWhenCompilerBinaryIsTrusted(): void
+    public function testReturnsFastCommandWhenPackageCompilerBinaryIsTrusted(): void
     {
-        $this->createTrustedCompilerBinary();
+        $this->createTrustedPackageCompilerBinary();
+        $loader = $this->createLoader();
+
+        $command = $loader->get(DiCompileCommand::NAME);
+
+        $this->assertInstanceOf(FastDiCompileCommand::class, $command);
+    }
+
+    public function testReturnsFastCommandWhenDevelopmentCompilerBinaryIsTrusted(): void
+    {
+        $this->createTrustedDevelopmentCompilerBinary();
         $loader = $this->createLoader();
 
         $command = $loader->get(DiCompileCommand::NAME);
@@ -51,12 +61,12 @@ class AggregateInterceptorTest extends TestCase
         $this->assertSame($standardCommand, $command);
     }
 
-    public function testFallsBackToStandardCommandWhenCompilerBinaryIsSymlink(): void
+    public function testFallsBackToStandardCommandWhenPackageCompilerBinaryIsSymlink(): void
     {
         $target = $this->testRoot . '/safe-target';
         file_put_contents($target, "#!/usr/bin/env php\n<?php exit(0);\n");
         chmod($target, 0755);
-        $binary = $this->createCompilerBinaryDirectory() . '/fast-di-compile';
+        $binary = $this->createPackageCompilerBinaryDirectory() . '/fast-di-compile';
 
         if (!symlink($target, $binary)) {
             $this->markTestSkipped('Symlinks are not available in this environment.');
@@ -70,12 +80,12 @@ class AggregateInterceptorTest extends TestCase
         $this->assertSame($standardCommand, $command);
     }
 
-    public function testFallsBackToStandardCommandWhenCompilerDirectoryIsGroupWritable(): void
+    public function testFallsBackToStandardCommandWhenPackageCompilerDirectoryIsGroupWritable(): void
     {
-        $releaseDirectory = $this->createCompilerBinaryDirectory();
-        file_put_contents($releaseDirectory . '/fast-di-compile', "#!/usr/bin/env php\n<?php exit(0);\n");
-        chmod($releaseDirectory . '/fast-di-compile', 0755);
-        chmod($releaseDirectory, 0775);
+        $binaryDirectory = $this->createPackageCompilerBinaryDirectory();
+        file_put_contents($binaryDirectory . '/fast-di-compile', "#!/usr/bin/env php\n<?php exit(0);\n");
+        chmod($binaryDirectory . '/fast-di-compile', 0755);
+        chmod($binaryDirectory, 0775);
         $standardCommand = $this->createStandardCommand(DiCompileCommand::NAME);
         $loader = $this->createLoader($standardCommand);
 
@@ -122,9 +132,18 @@ class AggregateInterceptorTest extends TestCase
         };
     }
 
-    private function createTrustedCompilerBinary(): string
+    private function createTrustedPackageCompilerBinary(): string
     {
-        $binaryDirectory = $this->createCompilerBinaryDirectory();
+        return $this->createTrustedCompilerBinary($this->createPackageCompilerBinaryDirectory());
+    }
+
+    private function createTrustedDevelopmentCompilerBinary(): string
+    {
+        return $this->createTrustedCompilerBinary($this->createDevelopmentCompilerBinaryDirectory());
+    }
+
+    private function createTrustedCompilerBinary(string $binaryDirectory): string
+    {
         $binary = $binaryDirectory . '/fast-di-compile';
         file_put_contents($binary, "#!/usr/bin/env php\n<?php exit(0);\n");
         chmod($binary, 0755);
@@ -132,15 +151,31 @@ class AggregateInterceptorTest extends TestCase
         return $binary;
     }
 
-    private function createCompilerBinaryDirectory(): string
+    private function createPackageCompilerBinaryDirectory(): string
     {
-        $parts = [
+        return $this->createDirectoryTree([
+            $this->testRoot . '/vendor',
+            $this->testRoot . '/vendor/spmt',
+            $this->testRoot . '/vendor/spmt/magento2-spmt-fast-di-compile',
+            $this->testRoot . '/vendor/spmt/magento2-spmt-fast-di-compile/bin',
+        ]);
+    }
+
+    private function createDevelopmentCompilerBinaryDirectory(): string
+    {
+        return $this->createDirectoryTree([
             $this->testRoot . '/rust',
             $this->testRoot . '/rust/di-compiler',
             $this->testRoot . '/rust/di-compiler/target',
             $this->testRoot . '/rust/di-compiler/target/release',
-        ];
+        ]);
+    }
 
+    /**
+     * @param string[] $parts
+     */
+    private function createDirectoryTree(array $parts): string
+    {
         foreach ($parts as $part) {
             if (!is_dir($part)) {
                 mkdir($part, 0755, true);
@@ -148,7 +183,7 @@ class AggregateInterceptorTest extends TestCase
             chmod($part, 0755);
         }
 
-        return $this->testRoot . '/rust/di-compiler/target/release';
+        return end($parts);
     }
 
     private function resetTestRoot(): void

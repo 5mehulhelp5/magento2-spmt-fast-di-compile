@@ -18,9 +18,15 @@ use Symfony\Component\Console\Command\Command;
 class AggregateInterceptor extends Aggregate
 {
     /**
-     * Binary location relative to Magento's project root.
+     * Composer package binary location relative to Magento's project root.
      */
-    private const BINARY_RELATIVE_PATH = 'rust/di-compiler/target/release/fast-di-compile';
+    private const PACKAGE_BINARY_RELATIVE_PATH =
+        'vendor/spmt/magento2-spmt-fast-di-compile/bin/fast-di-compile';
+
+    /**
+     * Local development binary location relative to Magento's project root.
+     */
+    private const DEVELOPMENT_BINARY_RELATIVE_PATH = 'rust/di-compiler/target/release/fast-di-compile';
 
     /**
      * Permission bits that allow write access outside the file owner.
@@ -58,26 +64,43 @@ class AggregateInterceptor extends Aggregate
             return null;
         }
 
-        $binary = $root . DIRECTORY_SEPARATOR . self::BINARY_RELATIVE_PATH;
-        $binaryFile = new SplFileInfo($binary);
-        if (!$binaryFile->isFile() || !$binaryFile->isExecutable()) {
-            return null;
+        foreach ($this->getBinaryCandidatePaths($root) as $binary) {
+            $binaryFile = new SplFileInfo($binary);
+            if (!$binaryFile->isFile() || !$binaryFile->isExecutable()) {
+                continue;
+            }
+
+            if ($this->pathContainsSymlink($binary, $root)) {
+                continue;
+            }
+
+            $realPath = $binaryFile->getRealPath();
+            if (!is_string($realPath) || !$this->isPathInsideRoot($realPath, $root)) {
+                continue;
+            }
+
+            if (!$this->hasTrustedPermissions($binary, $root)) {
+                continue;
+            }
+
+            return $realPath;
         }
 
-        if ($this->pathContainsSymlink($binary, $root)) {
-            return null;
-        }
+        return null;
+    }
 
-        $realPath = $binaryFile->getRealPath();
-        if (!is_string($realPath) || !$this->isPathInsideRoot($realPath, $root)) {
-            return null;
-        }
-
-        if (!$this->hasTrustedPermissions($binary, $root)) {
-            return null;
-        }
-
-        return $realPath;
+    /**
+     * Return trusted binary locations in priority order.
+     *
+     * @param string $root
+     * @return string[]
+     */
+    private function getBinaryCandidatePaths(string $root): array
+    {
+        return [
+            $root . DIRECTORY_SEPARATOR . self::PACKAGE_BINARY_RELATIVE_PATH,
+            $root . DIRECTORY_SEPARATOR . self::DEVELOPMENT_BINARY_RELATIVE_PATH,
+        ];
     }
 
     /**

@@ -2,12 +2,13 @@
 
 Companion Magento module for [speedupmate/di-compiler](https://github.com/speedupmate/di-compiler/), a Rust replacement for Magento's `bin/magento setup:di:compile`.
 
-This module keeps the normal Magento command name and swaps in the Rust compiler when the binary is available.
+This module keeps the normal Magento command name and swaps in the Rust compiler when a trusted `fast-di-compile` binary is available.
 
 ## What it does
 
 - Replaces Magento's `setup:di:compile` command loader entry with a fast-di-compile wrapper.
-- Runs the Rust binary at `rust/di-compiler/target/release/fast-di-compile`.
+- Prefers the package binary at `vendor/spmt/magento2-spmt-fast-di-compile/bin/fast-di-compile`.
+- Falls back to the local development binary at `rust/di-compiler/target/release/fast-di-compile`.
 - Passes Magento's project root to the binary with `--magento-root`.
 - Forwards supported fast-di-compile options from Magento CLI.
 - Constrains forwarded path options to paths inside the Magento project root.
@@ -18,11 +19,11 @@ This module keeps the normal Magento command name and swaps in the Rust compiler
 
 ## Get started
 
-You need a running Magento installation and a built `fast-di-compile` binary.
+You need a running Magento installation and a `fast-di-compile` binary for your platform.
 
 - Magento or Adobe Commerce.
 - This module installed and enabled.
-- The Rust compiler binary built from [speedupmate/di-compiler](https://github.com/speedupmate/di-compiler/).
+- A Linux or macOS binary from [speedupmate/di-compiler releases](https://github.com/speedupmate/di-compiler/releases), or a locally built binary for development.
 
 ### 1. Installation
 
@@ -35,22 +36,58 @@ bin/magento module:enable Spmt_FastDiCompile
 
 The module source lives in `./src`.
 
-### 2. Build the Rust compiler
+### 2. Install the Rust compiler binary
 
-From the Magento project root:
+For normal Composer installs, install the latest platform binary into the package with the Composer bin command:
+
+```bash
+vendor/bin/install-fast-di-compile
+```
+
+The installer uses PHP ext-curl, which is already required by magento/framework. It detects Linux/macOS and x64/arm64 automatically, resolves the latest `speedupmate/di-compiler` GitHub release, reads each release asset's SHA-256 digest from the GitHub API, and downloads the matching archive plus `sha256sums.txt`. The checksum file must match its GitHub API digest, and the archive digest in `sha256sums.txt` must agree with the archive asset digest from the API. If `sha256sums.txt` also lists `fast-di-compile`, the extracted binary must match that checksum before it is installed to:
+
+```text
+vendor/spmt/magento2-spmt-fast-di-compile/bin/fast-di-compile
+```
+
+If the Composer bin proxy is not available yet, run the package script directly:
+
+```bash
+vendor/spmt/magento2-spmt-fast-di-compile/bin/install-fast-di-compile
+```
+
+Useful installer options:
+
+| Option | What it does |
+| --- | --- |
+| `--version v1.0.3` | Install a specific release tag instead of the latest release. Defaults to `SPMT_FAST_DI_COMPILE_VERSION` when that is set. |
+| `--platform linux-arm64` | Override automatic platform detection. |
+| `--force` | Replace a symlink or a binary that is not the selected release. |
+| `--install-dir /path/to/bin` | Install into a custom directory. |
+
+A stamped package-installed binary is replaced when the selected release archive digest changes. A symlink, or a file that is not the selected release, stays in place unless `--force` is set. The sidecar `fast-di-compile.release-stamp` only avoids a repeat download for a matching binary; anyone who can write the install directory can forge it, so it is not a trust boundary.
+
+Release asset suffixes are:
+
+| Platform | Asset suffix |
+| --- | --- |
+| Linux x64 | `linux-x64` |
+| Linux arm64 | `linux-arm64` |
+| macOS Intel | `macos-x64` |
+| macOS Apple Silicon | `macos-arm64` |
+
+For local Rust development, you can still build from source instead:
 
 ```bash
 cd rust/di-compiler
 cargo build --release -p fast-di-compile
 ```
 
-The module expects the executable at:
+The development fallback path is:
 
 ```text
 rust/di-compiler/target/release/fast-di-compile
 ```
-
-See [speedupmate/di-compiler](https://github.com/speedupmate/di-compiler/) for Docker build instructions and host-platform notes.
 
 ### 3. Compile your Magento project
 
@@ -60,7 +97,7 @@ Run the normal Magento command:
 bin/magento setup:di:compile
 ```
 
-If the Rust binary exists, is executable, and passes the trust checks, this module runs `fast-di-compile`.
+If a trusted Rust binary exists, this module runs `fast-di-compile`.
 
 To force Magento's standard PHP compiler:
 
@@ -91,13 +128,16 @@ bin/magento setup:di:compile --standard
 
 Magento builds console commands through `Magento\Framework\Console\CommandLoader\Aggregate`.
 
-This module registers a preference for that aggregate loader. When Magento asks for `setup:di:compile`, the module checks for an executable Rust binary at `BP/rust/di-compiler/target/release/fast-di-compile`.
+This module registers a preference for that aggregate loader. When Magento asks for `setup:di:compile`, the module checks for an executable compiler binary in this order:
 
-If the binary is available and trusted, the module returns a wrapper command named `setup:di:compile`. The binary must resolve inside `BP/rust/di-compiler/target/release`, must not be symlinked, and its path components must not be writable by group or other users.
+1. `BP/vendor/spmt/magento2-spmt-fast-di-compile/bin/fast-di-compile`
+2. `BP/rust/di-compiler/target/release/fast-di-compile`
+
+If a binary is available and trusted, the module returns a wrapper command named `setup:di:compile`. The binary must resolve inside `BP`, must not be symlinked, and its path components must not be writable by group or other users.
 
 The wrapper runs the Rust binary with the canonical Magento root, sets Magento's root as the process working directory, passes the current Magento CLI PHP binary to `--fallback-php`, strips common secret-bearing environment variables, streams sanitized stdout and stderr back to Magento's console output, and returns Magento success or failure codes based on the Rust process exit code. The Rust process timeout is 15 seconds.
 
-If the binary is not available or fails the trust checks, the original Magento command loader handles the command unchanged.
+If no trusted binary is available, the original Magento command loader handles the command unchanged.
 
 ## Debugging
 
@@ -154,7 +194,6 @@ bin/magento module:status Spmt_FastDiCompile
 
 ## License and copyright
 
-Copyright © 2026 Anton Siniorg.
+Copyright (c) 2026 Anton Siniorg.
 
 magento2-spmt-fast-di-compile is released under the [MIT License](LICENSE). Use it, improve it, and share it.
-
