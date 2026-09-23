@@ -3,7 +3,11 @@
     "description": "Spmt FastDiCompile module companion",
     "type": "magento2-module",
     "license": "MIT",
+    "bin": [
+        "bin/install-fast-di-compile.php"
+    ],
     "require": {
+        "ext-curl": "*",
         "magento/framework": "*",
         "php": ">=8.1",
         "symfony/console": "^6.4 || ^7.4",

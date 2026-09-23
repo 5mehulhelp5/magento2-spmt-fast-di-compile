@@ -2,3 +2,8 @@
 /.phpunit.cache/
 /Test/_tmp/
 /composer.lock
+/bin/fast-di-compile
+/bin/fast-di-compile.tmp-*
+/bin/fast-di-compile.release-stamp
+/bin/*.tar.gz
+/sha256sums.txt
