@@ -7,7 +7,7 @@ namespace Spmt\FastDiCompile\Test\Unit\Bin;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
-require_once dirname(__DIR__, 3) . '/bin/install-fast-di-compile';
+require_once dirname(__DIR__, 3) . '/bin/install-fast-di-compile.php';
 
 /**
  * @coversNothing

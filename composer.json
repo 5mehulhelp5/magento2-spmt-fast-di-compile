@@ -4,7 +4,7 @@
     "type": "magento2-module",
     "license": "MIT",
     "bin": [
-        "bin/install-fast-di-compile"
+        "bin/install-fast-di-compile.php"
     ],
     "require": {
         "ext-curl": "*",
