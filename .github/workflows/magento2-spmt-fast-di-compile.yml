@@ -57,6 +57,44 @@ jobs:
               phpunit --configuration phpunit.xml.dist
             '
 
+  installer-smoke:
+    name: Installer / latest Linux x64 release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Verify installer runtime
+        run: |
+          set -euo pipefail
+          php --version
+          php -r 'exit(extension_loaded("curl") ? 0 : 1);'
+
+      - name: Download latest compiler release
+        env:
+          INSTALL_DIR: ${{ runner.temp }}/fast-di-compile
+        run: |
+          set -euo pipefail
+          php bin/install-fast-di-compile.php \
+            --platform linux-x64 \
+            --install-dir "$INSTALL_DIR"
+          test -x "$INSTALL_DIR/fast-di-compile"
+          test -s "$INSTALL_DIR/fast-di-compile.release-stamp"
+          "$INSTALL_DIR/fast-di-compile" --version
+
+      - name: Run downloaded compiler without arguments
+        env:
+          INSTALL_DIR: ${{ runner.temp }}/fast-di-compile
+        run: |
+          set -euo pipefail
+          smoke_root="$RUNNER_TEMP/fast-di-no-args"
+          mkdir -p "$smoke_root"
+          cd "$smoke_root"
+          "$INSTALL_DIR/fast-di-compile"
+          test -s "$smoke_root/generated/metadata/global.php"
+
   magento-coding-standard:
     name: Magento Coding Standard
     runs-on: ubuntu-24.04
